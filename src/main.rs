@@ -1,21 +1,27 @@
-use std::{path::PathBuf, time::Instant};
+use std::{path::PathBuf, sync::Arc, time::Instant};
 
+// crates
 use crossbeam_channel as channel;
 use log::{debug, error, info, trace};
 use threadpool::ThreadPool;
 use walkdir::{DirEntry, Result, WalkDir};
 use worker::worker;
 
+
+// local modules
 mod args;
 use args::CliOptions;
 
 mod worker;
-use worker::pool;
+use worker::thread_pool;
 
 mod hash;
 mod schema;
-use schema::establish_sqlite3_connection;
+
 mod fileinfo;
+
+mod pool;
+use pool::establish_pool;
 
 fn main() -> anyhow::Result<()> {
     let now = Instant::now();
@@ -26,7 +32,8 @@ fn main() -> anyhow::Result<()> {
     let options = CliOptions::new()?;
     debug!("options: {:?}", options);
 
-    let conn = establish_sqlite3_connection("iaa.db")?;
+    let pool = establish_pool();
+    let connection_pool= Arc::new(pool);
 
     //───────────────────────────────────────────────────────────────────────────────────
     // create channels
@@ -36,31 +43,13 @@ fn main() -> anyhow::Result<()> {
     //───────────────────────────────────────────────────────────────────────────────────
     // start threads
     //───────────────────────────────────────────────────────────────────────────────────
-    let handles = pool(options.nb_threads, job_receiver);
+    let handles = thread_pool(options.nb_threads, job_receiver, &connection_pool);
     info!("created {} threads", options.nb_threads);
 
     // walk through directory
     for entry in WalkDir::new(&options.start_path) {
         if let Ok(entry) = entry {
-            // if let Ok(metadata) = entry.metadata() {
-            //     if metadata.is_file() {
-            //         let path = entry.path().to_owned();
-            //         trace!("processing path: {}", path.display());
-            //         // println!("processing path: {}", path.display());
-
-            //         // let tx = tx.clone();
-            //         job_sender.send(path).unwrap();
-
-            //         // pool.execute(move || {
-            //         //     tx.send(path).unwrap();
-            //         //     // let hash = blake3_hash(&path).unwrap();
-            //         //     // println!("{}:{}", hash, path.display());
-            //         //     // // tx.send(hash).expect("Could not send data!");
-            //         // });
-            //     }
-            // }
             job_sender.send(entry).unwrap();
-
         } else {
             error!("error processing entry '{:?}'", entry);
         }
@@ -70,7 +59,8 @@ fn main() -> anyhow::Result<()> {
 
     // wait for threads to finish
     for id in handles {
-        id.join().unwrap();
+        id.join()
+            .map_err(|e| format!("error {:?}: unable to join thread", e));
     }
 
     //───────────────────────────────────────────────────────────────────────────────────

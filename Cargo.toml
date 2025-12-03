@@ -4,14 +4,15 @@ name = "iaa"
 version = "0.1.0"
 
 [dependencies]
-anyhow = "1.0.96"
-blake3 = "1.6.0"
+anyhow = "1.0.100"
+blake3 = "1.8.2"
+chrono = {version = "0.4.42", features = ["std"] }
 clap = {version = "4.5.31", features = ["cargo"]}
 crate-version = "0.1.0"
 crossbeam-channel = "0.5.14"
-diesel = {version = "2.2.7", default-features = false, features = ["sqlite"]}
+diesel = {version = "2.3.4", default-features = false, features = ["postgres", "chrono", "r2d2"]}
 log = "0.4.26"
-num_cpus = "1.16.0"
+num_cpus = "1.17.0"
 sha256 = "1.5.0"
 simplelog = "0.12.2"
 threadpool = "1.8.1"
