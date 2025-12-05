@@ -1,39 +1,61 @@
 // module for main worker
 use std::{
-    fs::{self, File, FileType, Metadata, read}, io::{BufReader, Result}, path::{Path, PathBuf}, sync::Arc, thread::{self, JoinHandle}, time::{SystemTime, UNIX_EPOCH}
+    sync::Arc,
+    thread::{self, JoinHandle},
+    time::SystemTime,
 };
 
 use chrono::{DateTime, NaiveDateTime, Utc};
 use crossbeam_channel as channel;
+use diesel::{
+    r2d2::{ConnectionManager, PooledConnection},
+    PgConnection, RunQueryDsl,
+};
 use log::trace;
 use walkdir::{DirEntry, DirEntryExt};
-use diesel::{PgConnection, RunQueryDsl, r2d2::{ConnectionManager, PooledConnection}};
 
-use crate::{fileinfo::FileInfo, hash::Hashes};
-use crate::schema::files::dsl::files;
+use crate::{
+    args::Args,
+    fileinfo::{FileInfo, ForensicsFileType},
+};
+use crate::{memory::MappedFile, schema::files::dsl::files};
 
 pub type ChanReceiver = channel::Receiver<DirEntry>;
 
-pub fn thread_pool(n: usize, rec: ChanReceiver, pool: &Arc<diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<PgConnection>>>) -> Vec<JoinHandle<()>> {
+// buld a thread pool: each thread will start a worker aimed at inserting data into PG
+pub fn thread_pool(
+    n: usize,
+    rec: ChanReceiver,
+    pool: &Arc<diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<PgConnection>>>,
+    args: &Arc<Args>,
+) -> anyhow::Result<Vec<JoinHandle<()>>> {
     // create n threads for handle workers
     let mut handles = Vec::new();
 
     for i in 0..n {
         let pool = pool.clone();
+        let args = args.clone();
 
         let rx = rec.clone();
         let id = thread::spawn(move || {
             let mut conn = pool.get().expect("db conn error");
             trace!("starting thread {}", i);
-            worker(rx, &mut conn);
+            if let Err(e) = worker(rx, &mut conn, &args) {
+                eprintln!("error '{e}' in closure");
+            }
         });
         handles.push(id);
     }
 
-    return handles;
+    return Ok(handles);
 }
 
-pub fn worker(rx: ChanReceiver, conn: &mut PooledConnection<ConnectionManager<PgConnection>>) -> anyhow::Result<()> {
+// worker receiving DirEntry and inserting it into the PG table
+pub fn worker(
+    rx: ChanReceiver,
+    conn: &mut PooledConnection<ConnectionManager<PgConnection>>,
+    args: &Arc<Args>,
+) -> anyhow::Result<()> {
     for entry in &rx {
         // get metadata on this file
         let mut fi = FileInfo::default();
@@ -42,69 +64,52 @@ pub fn worker(rx: ChanReceiver, conn: &mut PooledConnection<ConnectionManager<Pg
         // manage cases of Windows for UTF-16 strings
         fi.path = entry.path().to_string_lossy().into_owned();
         fi.winpath = entry.path().as_os_str().into();
+        fi.ext = entry
+            .path()
+            .extension()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
 
         fi.name = entry.file_name().to_string_lossy().into_owned();
         fi.winname = entry.file_name().into();
 
-        fi.r#type = file_type(&entry.file_type());
+        fi.r#type = ForensicsFileType::from(&entry.file_type());
 
         // get metadata
         let meta = entry.metadata()?;
         fi.len = meta.len() as i32;
 
         // timestamps
-        fi.created = systemtime_to_naive(meta.created()?);
-        fi.accessed = systemtime_to_naive(meta.accessed()?);
-        fi.modified = systemtime_to_naive(meta.modified()?);
+        if let Ok(time) = meta.created() {
+            fi.created = Some(time);
+        }
+        fi.accessed = meta.accessed()?;
+        fi.modified = meta.modified()?;
 
+        // calculate hashes, only for files
+        if fi.r#type == ForensicsFileType::File && fi.len != 0 {
+            // for other operations, we need to open and read files
+            let mapped = MappedFile::try_from(entry.path())?;
 
-        // calculate hashes
-        let data = fs::read(entry.path())?;
-        fi.blake3 = blake3::hash(&data).to_string();
+            // according to oprions, call whatever is asked
+            if args.blake3 {
+                fi.blake3 = mapped.blake3();
+            }
+
+            if args.sha256 {
+                fi.sha256 = mapped.sha256();
+            }
+
+            if args.entropy {
+                fi.entropy = Some(mapped.entropy());
+            }
+        }
 
         // insert data
-        diesel::insert_into(files).values(&fi).execute(conn);
-
-
-        /*         let hash = Hashes::sha256(&entry).unwrap();
-        trace!(
-            "{:?}: path:{} hash:{}",
-            thread::current().id(),
-            entry.display(),
-            hash
-        ); */
-
+        diesel::insert_into(files).values(&fi).execute(conn)?;
         trace!("{:?}", fi);
     }
-    // let data = read(path)?;
-    // let h = blake3::hash(&data);
-
-    // println!("==============> starting worker");
-
-    // while let Ok(path) = rx.recv() {
-    //     let hash = Hashes::sha256(&path)?;
-    //     println!("{}:{}", path.display(), hash);
-    // }
-
-    // println!("==============> end worker");
 
     Ok(())
-}
-// 
-fn file_type(ft: &FileType) -> &'static str {
-    if ft.is_file() {
-        "F"
-    } else if ft.is_dir() {
-        "D"
-    } else if ft.is_symlink() {
-        "S"
-    } else {
-        "U"
-    }
-}
-
-// SystemTime -> NaiveDateTime
-fn systemtime_to_naive(time: SystemTime) -> NaiveDateTime {
-    let dt = DateTime::<Utc>::from(time);
-    dt.naive_utc()
 }

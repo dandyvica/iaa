@@ -1,85 +1,95 @@
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 
+//use clap::builder::styling;
+use anyhow::anyhow;
+use clap::Parser;
 use clap::builder::styling;
-use clap::{crate_version, Arg, ArgAction, Command};
 use simplelog::*;
 
-//───────────────────────────────────────────────────────────────────────────────────
-// This structure holds the command line arguments.
-//───────────────────────────────────────────────────────────────────────────────────
-#[derive(Debug, Default, Clone)]
-pub struct CliOptions {
-    // starting directory path
-    pub start_path: PathBuf,
+const DB: &'static str = "IAA_DB";
 
-    // number of threads
-    pub nb_threads: usize,
+/// Hide a file into a PNG one.
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None, color = clap::ColorChoice::Always)]
+pub struct Args {
+    /// starting directory path
+    #[arg(short, long, required = true, value_name = "PATH")]
+    pub dir: PathBuf,
+
+    /// number of thread to use
+    #[arg(long, short)]
+    pub threads: Option<usize>,
+
+    /// log file
+    #[arg(long)]
+    pub log: Option<PathBuf>,
+
+    /// Postgresql database URL. if not specified, takes the value from the IAA_DB enviroment variable
+    #[arg(long)]
+    pub db: String,
+
+    /// if set, delete all rows from the table before inserting
+    #[arg(long)]
+    pub overwrite: bool,
+
+    /// if set, calculate BLAKE3 hashes
+    #[arg(long)]
+    pub blake3: bool,
+
+    /// if set, calculate SHA256 hashes
+    #[arg(long)]
+    pub sha256: bool,
+
+    /// if set, calculate Shannon entropy
+    #[arg(long)]
+    pub entropy: bool,
+
+    /// Verbose mode (-v, -vv, -vvv)
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    verbose: u8,
 }
 
-impl CliOptions {
-    pub fn new() -> anyhow::Result<Self> {
-        // save all cli options into a structure
-        let mut options = CliOptions::default();
+pub fn get_args() -> anyhow::Result<Args> {
+    let mut args = Args::parse();
 
-        // colors when displaying
-        const STYLES: styling::Styles = styling::Styles::styled()
-            .header(styling::AnsiColor::Green.on_default().bold())
-            .usage(styling::AnsiColor::Green.on_default().bold())
-            .literal(styling::AnsiColor::Blue.on_default().bold())
-            .placeholder(styling::AnsiColor::Cyan.on_default());
-
-        let matches = Command::new("A DNS query tool inspired by dig, drill and dog")
-            .version(crate_version!())
-            .long_version(crate_version!())
-            .styles(STYLES)
-            .author("Alain Viguier dandyvica@gmail.com")
-            .arg(
-                Arg::new("dir")
-                    .short('d')
-                    .long("dir")
-                    .long_help("Starting directory from which to walk.")
-                    .action(ArgAction::Append)
-                    .value_name("PATH")
-                    .value_parser(clap::value_parser!(PathBuf))
-                    .default_value("."),
-            )
-            .arg(
-                Arg::new("threads")
-                    .short('t')
-                    .long("threads")
-                    .long_help("Number of threads to start.")
-                    .action(ArgAction::Append)
-                    .value_name("THREADS")
-                    .value_parser(clap::value_parser!(usize)),
-            )
-            .arg(
-                Arg::new("log")
-                    .long("log")
-                    .long_help("Save debugging info into the file LOG.")
-                    .action(ArgAction::Set)
-                    .value_name("LOG")
-                    .value_parser(clap::value_parser!(PathBuf)),
-            )
-            .get_matches();
-
-        //───────────────────────────────────────────────────────────────────────────────────
-        // manage options
-        //───────────────────────────────────────────────────────────────────────────────────
-        options.start_path = matches.get_one::<PathBuf>("dir").unwrap().clone();
-        options.nb_threads = *matches
-            .get_one::<usize>("threads")
-            .unwrap_or(&num_cpus::get());
-
-        if let Some(path) = matches.get_one::<PathBuf>("log") {
-            init_write_logger(path, log::LevelFilter::Trace)?;
-        } else {
-            init_term_logger(log::LevelFilter::Trace)?;
-        }
-
-        Ok(options)
+    // by default, use number of cores for threads
+    if args.threads.is_none() {
+        args.threads = Some(num_cpus::get());
     }
+
+    // manage DB url
+    if args.db.is_empty() {
+        match std::env::var(DB) {
+            Ok(db) => args.db = db,
+            Err(e) => return Err(anyhow!("no PG DB provided!")),
+        }
+    }
+
+    // extract loglevel from verbose flag
+    let level = match args.verbose {
+        0 => log::LevelFilter::Warn,
+        1 => log::LevelFilter::Info,
+        2 => log::LevelFilter::Debug,
+        _ => log::LevelFilter::Trace,
+    };
+
+    // manage log file
+    if let Some(path) = &args.log {
+        init_write_logger(&path, level)?;
+    } else {
+        init_term_logger(level)?;
+    }
+
+    Ok(args)
 }
+
+// colors when displaying
+const STYLES: styling::Styles = styling::Styles::styled()
+    .header(styling::AnsiColor::Green.on_default().bold())
+    .usage(styling::AnsiColor::Green.on_default().bold())
+    .literal(styling::AnsiColor::Blue.on_default().bold())
+    .placeholder(styling::AnsiColor::Cyan.on_default());
 
 // Initialize write logger: either create it or use it
 fn init_write_logger(logfile: &PathBuf, level: log::LevelFilter) -> anyhow::Result<()> {

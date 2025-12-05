@@ -7,11 +7,13 @@ version = "0.1.0"
 anyhow = "1.0.100"
 blake3 = "1.8.2"
 chrono = {version = "0.4.42", features = ["std"] }
-clap = {version = "4.5.31", features = ["cargo"]}
+clap = { version = "4.5.53", features = ["cargo", "derive"] }
 crate-version = "0.1.0"
 crossbeam-channel = "0.5.14"
-diesel = {version = "2.3.4", default-features = false, features = ["postgres", "chrono", "r2d2"]}
+diesel = {version = "2.3.4", default-features = false, features = ["postgres", "postgres_backend", "chrono", "r2d2"]}
+entropy = "0.4.2"
 log = "0.4.26"
+memmap = "0.7.0"
 num_cpus = "1.17.0"
 sha256 = "1.5.0"
 simplelog = "0.12.2"

@@ -4,12 +4,15 @@ diesel::table! {
         id -> Integer,
         path -> Text,
         name -> Text,
+        ext -> Text,
         r#type -> Text,
         len -> Integer,
         created -> Timestamp,
         accessed -> Timestamp,
         modified -> Timestamp,
-        blake3 -> Text
+        sha256 -> Text,
+        blake3 -> Text,
+        entropy -> Float
     }
 }
 
