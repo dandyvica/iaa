@@ -1,12 +1,12 @@
-// Define the FILES table
+// Define the ARTEFACT table
 diesel::table! {
-    files (id) {
+    artefact (id) {
         id -> Integer,
         path -> Text,
         name -> Text,
         ext -> Text,
         r#type -> Text,
-        len -> Integer,
+        len -> BigInt,
         created -> Timestamp,
         accessed -> Timestamp,
         modified -> Timestamp,

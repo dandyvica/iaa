@@ -26,8 +26,8 @@ pub struct Args {
     pub log: Option<PathBuf>,
 
     /// Postgresql database URL. if not specified, takes the value from the IAA_DB enviroment variable
-    #[arg(long)]
-    pub db: String,
+    #[arg(long, required = false)]
+    pub db: Option<String>,
 
     /// if set, delete all rows from the table before inserting
     #[arg(long)]
@@ -59,9 +59,9 @@ pub fn get_args() -> anyhow::Result<Args> {
     }
 
     // manage DB url
-    if args.db.is_empty() {
+    if args.db.is_none() {
         match std::env::var(DB) {
-            Ok(db) => args.db = db,
+            Ok(db) => args.db = Some(db),
             Err(e) => return Err(anyhow!("no PG DB provided!")),
         }
     }

@@ -14,7 +14,7 @@ use diesel::sql_types::{Integer, Text};
 use diesel::Insertable;
 use diesel::{prelude::*, serialize};
 
-use crate::schema::files;
+use crate::schema::artefact;
 
 const FT_FILE: &'static str = "F";
 const FT_DIRECTORY: &'static str = "D";
@@ -69,7 +69,7 @@ impl ToSql<Text, Pg> for ForensicsFileType {
 }
 
 #[derive(Debug, Insertable)]
-#[diesel(table_name = files)]
+#[diesel(table_name = artefact)]
 pub struct FileInfo {
     // full path: on UNIX platforms, could be represented as a UTF-8 string
     pub path: String,
@@ -92,7 +92,7 @@ pub struct FileInfo {
     pub r#type: ForensicsFileType,
 
     // file length
-    pub len: i32,
+    pub len: i64,
 
     // creation time (only for Unices, Windows not possible)
     pub created: Option<SystemTime>,

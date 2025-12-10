@@ -18,7 +18,7 @@ use crate::{
     args::Args,
     fileinfo::{FileInfo, ForensicsFileType},
 };
-use crate::{memory::MappedFile, schema::files::dsl::files};
+use crate::{memory::MappedFile, schema::artefact::dsl::artefact};
 
 pub type ChanReceiver = channel::Receiver<DirEntry>;
 
@@ -78,7 +78,7 @@ pub fn worker(
 
         // get metadata
         let meta = entry.metadata()?;
-        fi.len = meta.len() as i32;
+        fi.len = meta.len() as i64;
 
         // timestamps
         if let Ok(time) = meta.created() {
@@ -107,7 +107,7 @@ pub fn worker(
         }
 
         // insert data
-        diesel::insert_into(files).values(&fi).execute(conn)?;
+        diesel::insert_into(artefact).values(&fi).execute(conn)?;
         trace!("{:?}", fi);
     }
 

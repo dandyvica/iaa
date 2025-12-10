@@ -22,7 +22,7 @@ mod fileinfo;
 mod pool;
 use pool::establish_pool;
 
-use schema::files::dsl::files;
+use schema::artefact::dsl::artefact;
 
 mod memory;
 
@@ -38,14 +38,14 @@ fn main() -> anyhow::Result<()> {
     //───────────────────────────────────────────────────────────────────────────────────
     // create a connection pool for PG
     //───────────────────────────────────────────────────────────────────────────────────
-    let pool = establish_pool(&args.db);
+    let pool = establish_pool(&args.db.clone().unwrap());
 
     //───────────────────────────────────────────────────────────────────────────────────
     // delete all rows first if requested
     //───────────────────────────────────────────────────────────────────────────────────
     if args.overwrite {
         let mut conn = pool.get()?;
-        diesel::delete(files).execute(&mut conn)?;
+        diesel::delete(artefact).execute(&mut conn)?;
     }
 
     //───────────────────────────────────────────────────────────────────────────────────
