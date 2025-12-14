@@ -2,7 +2,17 @@ use std::{fs::File, io, ops::Deref, path::Path};
 
 use memmap::Mmap;
 
-use crate::discoverer::{Discoverer, PNG};
+use crate::discoverer::Discoverer;
+
+macro_rules! try_discover {
+    ($Struct:ident, $Self:ident) => {
+        use crate::discoverer::$Struct;
+
+        if let Some(value) = $Struct::mime($Self) {
+            return Some(value);
+        }
+    };
+}
 
 // as we have to calculate hashes, magic number etc, w use memmap
 // to load data in to memory
@@ -43,10 +53,10 @@ impl MappedFile {
 
     // try to discover mime type from magic numbers
     pub fn discover(&self) -> Option<&'static str> {
-        // try PNG
-        if let Some(value) = PNG::mime(self) {
-            return Some(value);
-        }
+        try_discover!(PNG, self);
+        try_discover!(SQLITE3, self);
+        try_discover!(GIF87a, self);
+        try_discover!(GIF89a, self);
 
         None
     }

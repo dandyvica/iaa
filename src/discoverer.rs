@@ -2,17 +2,70 @@ use hex_literal::hex;
 use serde::Serialize;
 use serde_json::{Result, Value};
 
+// list of usual file signatures
+type SIGNATURE<'a> = (&'a [u8], Option<&'a [u8]>, &'static str);
+
+const SIGN_SQLITE3: SIGNATURE = (
+    b"\x53\x51\x4C\x69\x74\x65\x20\x66\x6F\x72\x6D\x61\x74\x20\x33\x00",
+    None,
+    "sqlite3",
+);
+
+#[allow(non_upper_case_globals)]
+const SIGN_GIF87a: SIGNATURE = (
+    b"\x47\x49\x46\x38\x37\x61",
+    None,
+    "GIF87a",
+);
+
+#[allow(non_upper_case_globals)]
+const SIGN_GIF89a: SIGNATURE = (
+    b"\x47\x49\x46\x38\x39\x61",
+    None,
+    "GIF89a",
+);
+
+// a macro for defining impl Discoverer
+macro_rules! impl_discoverer {
+    // Struct = struct name
+    // Sign = tuple containing signatures
+    ($Struct:ident, $Sign:ident) => {
+        pub struct $Struct;
+        impl<'a> Discoverer<'a> for $Struct {
+            const HEADER: &'a [u8] = $Sign.0;
+            const FOOTER: Option<&'a [u8]> = $Sign.1;
+            const MIME: &'static str = $Sign.2;
+
+            fn mime(bytes: &'a [u8]) -> Option<&'static str> {
+                if bytes.len() >= Self::HEADER.len()
+                    && bytes[0..Self::HEADER.len()] == *Self::HEADER
+                {
+                    Some(Self::MIME)
+                } else {
+                    None
+                }
+            }
+        }
+    };
+}
+
+// real implemntations
+impl_discoverer!(SQLITE3, SIGN_SQLITE3);
+impl_discoverer!(GIF87a, SIGN_GIF87a);
+impl_discoverer!(GIF89a, SIGN_GIF89a);
+
+
 // a trait for tyring to discover file types using magic numbers
 pub trait Discoverer<'a> {
     const HEADER: &'a [u8];
-    const FOOTER: &'a [u8];
+    const FOOTER: Option<&'a [u8]>;
     const MIME: &'static str;
 
     // try to match header/footer on file bytes
     fn mime(bytes: &'a [u8]) -> Option<&'static str>;
 
     // try to get specific metadata
-    fn metadata(bytes: &'a [u8]) -> Option<String>;
+    // fn metadata(bytes: &'a [u8]) -> Option<String>;
 }
 
 // PNGs
@@ -79,7 +132,7 @@ impl IHDR {
 
 impl<'a> Discoverer<'a> for PNG {
     const HEADER: &'a [u8] = &hex!("89 50 4E 47 0D 0A 1A 0A");
-    const FOOTER: &'a [u8] = &hex!("ae 42 60 82");
+    const FOOTER: Option<&'a [u8]> = Some(&hex!("ae 42 60 82"));
     const MIME: &'static str = "png";
 
     fn mime(bytes: &'a [u8]) -> Option<&'static str> {
@@ -87,7 +140,7 @@ impl<'a> Discoverer<'a> for PNG {
 
         if len >= 12
             && bytes[..Self::HEADER.len()] == *Self::HEADER
-            && bytes[len - 4..len] == *Self::FOOTER
+            && bytes[len - 4..len] == *Self::FOOTER.unwrap()
         {
             Some(Self::MIME)
         } else {
@@ -96,11 +149,10 @@ impl<'a> Discoverer<'a> for PNG {
     }
 
     // get IHDR chunk
-    fn metadata(bytes: &'a [u8]) -> Option<String> {
-        let ihdr = IHDR::from_bytes(&bytes[16..29]).unwrap_or_default();
-        Some(serde_json::to_string(&ihdr).unwrap())
-        
-    }
+    // fn metadata(bytes: &'a [u8]) -> Option<String> {
+    //     let ihdr = IHDR::from_bytes(&bytes[16..29]).unwrap_or_default();
+    //     Some(serde_json::to_string(&ihdr).unwrap())
+    // }
 }
 
 #[cfg(test)]
@@ -109,11 +161,22 @@ mod tests {
 
     #[test]
     fn png() -> anyhow::Result<()> {
-        let buffer = std::fs::read("tests/nemo.png")?;
+        let buffer = std::fs::read("tests/test.png")?;
         assert_eq!(PNG::mime(&buffer), Some("png"));
 
-        let buffer = std::fs::read("tests/example-image.jpg")?;
+        let buffer = std::fs::read("tests/test.jpg")?;
         assert!(PNG::mime(&buffer).is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn sqlite3() -> anyhow::Result<()> {
+        let buffer = std::fs::read("tests/test.db")?;
+        assert_eq!(SQLITE3::mime(&buffer), Some("sqlite3"));
+
+        let buffer = std::fs::read("tests/test.jpg")?;
+        assert!(SQLITE3::mime(&buffer).is_none());
 
         Ok(())
     }
