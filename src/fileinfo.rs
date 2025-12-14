@@ -1,20 +1,17 @@
 // main information for a path to insert into the database
 
 use std::ffi::OsString;
-use std::fmt;
 use std::fs::FileType;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use chrono::{NaiveDate, NaiveDateTime};
-use diesel::backend::Backend;
 use diesel::expression::AsExpression;
 use diesel::pg::Pg;
+use diesel::serialize;
 use diesel::serialize::{Output, ToSql};
-use diesel::sql_types::{Integer, Text};
+use diesel::sql_types::Text;
 use diesel::Insertable;
-use diesel::{prelude::*, serialize};
 
-use crate::schema::artefact;
+use crate::schema::{artefact, run_history};
 
 const FT_FILE: &'static str = "F";
 const FT_DIRECTORY: &'static str = "D";
@@ -44,17 +41,6 @@ impl From<&FileType> for ForensicsFileType {
         }
     }
 }
-
-// impl fmt::Display for ForensicsFileType {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         match self {
-//             Self::File => write!(f, "F"),
-//             Self::Directory => write!(f, "D"),
-//             Self::Symlink => write!(f, "S",),
-//             Self::Unknown => write!(f, "N"),
-//         }
-//     }
-// }
 
 // Implement ToSql for ForensicsFileType which is a custom type
 impl ToSql<Text, Pg> for ForensicsFileType {
@@ -111,6 +97,9 @@ pub struct FileInfo {
 
     // Shannon entropy
     pub entropy: Option<f32>,
+
+    // try to have kind of mime type from magic numbers
+    pub mime: Option<&'static str>,
 }
 
 // has to implement default manually cause SystemTime has no default
@@ -129,7 +118,30 @@ impl Default for FileInfo {
             modified: UNIX_EPOCH,
             sha256: String::new(),
             blake3: String::new(),
-            entropy: None
+            entropy: None,
+            mime: None,
+        }
+    }
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = run_history)]
+pub struct RunHistory {
+    pub start_time: SystemTime,
+    pub end_time: SystemTime,
+    pub nb_files: i64,
+    pub args: String,
+    pub tags: String,
+}
+
+impl Default for RunHistory {
+    fn default() -> Self {
+        Self {
+            start_time: SystemTime::now(),
+            end_time: SystemTime::now(),
+            nb_files: 0,
+            args: String::new(),
+            tags: String::new(),
         }
     }
 }

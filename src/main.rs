@@ -1,4 +1,7 @@
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::Arc,
+    time::{Instant, SystemTime},
+};
 
 // crates
 use crossbeam_channel as channel;
@@ -14,17 +17,17 @@ use args::get_args;
 mod worker;
 use worker::thread_pool;
 
-mod hash;
-mod schema;
-
 mod fileinfo;
-
+mod hash;
+mod memory;
 mod pool;
+mod schema;
 use pool::establish_pool;
+mod discoverer;
 
 use schema::artefact::dsl::artefact;
 
-mod memory;
+use crate::{args::raw_args, fileinfo::RunHistory, schema::run_history::dsl::run_history};
 
 fn main() -> anyhow::Result<()> {
     let now = Instant::now();
@@ -32,13 +35,20 @@ fn main() -> anyhow::Result<()> {
     //───────────────────────────────────────────────────────────────────────────────────
     // get cli options
     //───────────────────────────────────────────────────────────────────────────────────
+    let command_line = raw_args();
     let args = get_args()?;
     debug!("options: {:?}", args);
 
     //───────────────────────────────────────────────────────────────────────────────────
+    // start recording history
+    //───────────────────────────────────────────────────────────────────────────────────
+    let mut history = RunHistory::default();
+    history.args = command_line;
+
+    //───────────────────────────────────────────────────────────────────────────────────
     // create a connection pool for PG
     //───────────────────────────────────────────────────────────────────────────────────
-    let pool = establish_pool(&args.db.clone().unwrap());
+    let pool = establish_pool(&args.db.clone().unwrap(), args.threads.unwrap() as u32);
 
     //───────────────────────────────────────────────────────────────────────────────────
     // delete all rows first if requested
@@ -56,6 +66,7 @@ fn main() -> anyhow::Result<()> {
     //───────────────────────────────────────────────────────────────────────────────────
     // start threads
     //───────────────────────────────────────────────────────────────────────────────────
+    let mut history_conn = pool.get()?;
     let connection_pool = Arc::new(pool);
     let args = Arc::new(args);
     let handles = thread_pool(args.threads.unwrap(), job_receiver, &connection_pool, &args)?;
@@ -87,7 +98,20 @@ fn main() -> anyhow::Result<()> {
     // elapsed as millis will be hopefully enough
     //───────────────────────────────────────────────────────────────────────────────────
     let elapsed = now.elapsed();
-    info!("took {} millis for {file_count} artefacts", elapsed.as_millis());
+    info!(
+        "took {} millis for {file_count} artefacts",
+        elapsed.as_millis()
+    );
+
+    //───────────────────────────────────────────────────────────────────────────────────
+    // end up history
+    //───────────────────────────────────────────────────────────────────────────────────
+    history.nb_files = file_count as i64;
+    history.end_time = SystemTime::now();
+
+    diesel::insert_into(run_history)
+        .values(&history)
+        .execute(&mut history_conn)?;
 
     Ok(())
 }

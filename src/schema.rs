@@ -1,3 +1,7 @@
+use std::time::SystemTime;
+
+use diesel::Insertable;
+
 // Define the ARTEFACT table
 diesel::table! {
     artefact (id) {
@@ -12,11 +16,18 @@ diesel::table! {
         modified -> Timestamp,
         sha256 -> Text,
         blake3 -> Text,
-        entropy -> Float
+        entropy -> Float,
+        mime -> Text
     }
 }
 
-/* pub fn establish_sqlite3_connection(db: &str) -> anyhow::Result<SqliteConnection> {
-    SqliteConnection::establish(db)
-        .map_err(|e| anyhow!("error '{}' connecting to sqlite3 DB '{}'", e, db))
-} */
+// run history
+diesel::table! {
+    run_history (start_time) {
+        start_time -> Timestamp,
+        end_time -> Timestamp,
+        nb_files -> BigInt,
+        args -> Text,
+        tags -> Text
+    }
+}

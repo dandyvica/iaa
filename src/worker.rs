@@ -15,8 +15,7 @@ use log::trace;
 use walkdir::{DirEntry, DirEntryExt};
 
 use crate::{
-    args::Args,
-    fileinfo::{FileInfo, ForensicsFileType},
+    args::Args, discoverer::{Discoverer, PNG}, fileinfo::{FileInfo, ForensicsFileType}
 };
 use crate::{memory::MappedFile, schema::artefact::dsl::artefact};
 
@@ -103,6 +102,13 @@ pub fn worker(
 
             if args.entropy {
                 fi.entropy = Some(mapped.entropy());
+            }
+
+            // try to guess the mime type
+            fi.mime = mapped.discover();
+
+            if fi.mime == Some(PNG::MIME) {
+                println!("{:?}", PNG::metadata(&mapped));
             }
         }
 

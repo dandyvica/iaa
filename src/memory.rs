@@ -2,6 +2,8 @@ use std::{fs::File, io, ops::Deref, path::Path};
 
 use memmap::Mmap;
 
+use crate::discoverer::{Discoverer, PNG};
+
 // as we have to calculate hashes, magic number etc, w use memmap
 // to load data in to memory
 pub struct MappedFile(Mmap);
@@ -38,6 +40,16 @@ impl MappedFile {
     pub fn entropy(&self) -> f32 {
         entropy::shannon_entropy(self.as_ref())
     }
+
+    // try to discover mime type from magic numbers
+    pub fn discover(&self) -> Option<&'static str> {
+        // try PNG
+        if let Some(value) = PNG::mime(self) {
+            return Some(value);
+        }
+
+        None
+    }
 }
 
 impl Deref for MappedFile {
@@ -47,5 +59,3 @@ impl Deref for MappedFile {
         &self.0
     }
 }
-
-

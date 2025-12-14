@@ -3,13 +3,13 @@ use std::path::PathBuf;
 
 //use clap::builder::styling;
 use anyhow::anyhow;
-use clap::Parser;
 use clap::builder::styling;
+use clap::Parser;
 use simplelog::*;
 
 const DB: &'static str = "IAA_DB";
 
-/// Hide a file into a PNG one.
+/// Collect artefacts from a source.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, color = clap::ColorChoice::Always)]
 pub struct Args {
@@ -90,6 +90,12 @@ const STYLES: styling::Styles = styling::Styles::styled()
     .usage(styling::AnsiColor::Green.on_default().bold())
     .literal(styling::AnsiColor::Blue.on_default().bold())
     .placeholder(styling::AnsiColor::Cyan.on_default());
+
+// get raw command line, what the user typed
+pub fn raw_args() -> String {
+    let args: Vec<_> = std::env::args().collect();
+    args.join(" ")
+}
 
 // Initialize write logger: either create it or use it
 fn init_write_logger(logfile: &PathBuf, level: log::LevelFilter) -> anyhow::Result<()> {
