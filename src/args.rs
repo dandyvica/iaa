@@ -45,9 +45,21 @@ pub struct Args {
     #[arg(long)]
     pub entropy: bool,
 
+    /// if set, analyze file signatures to discover file type and add some metadat
+    #[arg(long)]
+    pub discover: bool,
+
     /// Verbose mode (-v, -vv, -vvv)
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
+
+    /// stop after COUNT files
+    #[arg(short, long, value_name = "COUNT")]
+    pub n: Option<u64>,
+
+    /// don't insert data in the database, just print out file details
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 pub fn get_args() -> anyhow::Result<Args> {

@@ -1,6 +1,7 @@
 use std::{
     sync::Arc,
     time::{Instant, SystemTime},
+    u64,
 };
 
 // crates
@@ -38,6 +39,8 @@ fn main() -> anyhow::Result<()> {
     let command_line = raw_args();
     let args = get_args()?;
     debug!("options: {:?}", args);
+
+    let max_count = args.n.unwrap_or_else(|| u64::MAX);
 
     //───────────────────────────────────────────────────────────────────────────────────
     // start recording history
@@ -80,6 +83,11 @@ fn main() -> anyhow::Result<()> {
         if let Ok(entry) = entry {
             file_count += 1;
             job_sender.send(entry)?;
+
+            // stops after n rounds
+            if file_count >= max_count {
+                return Ok(());
+            }
         } else {
             error!("error processing entry '{:?}'", entry);
         }

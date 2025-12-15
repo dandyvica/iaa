@@ -5,12 +5,13 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = "1.0.100"
+bincode = "2.0.1"
 blake3 = "1.8.2"
 chrono = {version = "0.4.42", features = ["std"] }
 clap = { version = "4.5.53", features = ["cargo", "derive"] }
 crate-version = "0.1.0"
 crossbeam-channel = "0.5.14"
-diesel = {version = "2.3.4", default-features = false, features = ["postgres", "postgres_backend", "chrono", "r2d2"]}
+diesel = {version = "2.3.4", default-features = false, features = ["postgres", "postgres_backend", "chrono", "r2d2", "serde_json"]}
 entropy = "0.4.2"
 hex-literal = "1.1.0"
 log = "0.4.26"

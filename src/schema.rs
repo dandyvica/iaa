@@ -1,7 +1,3 @@
-use std::time::SystemTime;
-
-use diesel::Insertable;
-
 // Define the ARTEFACT table
 diesel::table! {
     artefact (id) {
@@ -17,7 +13,8 @@ diesel::table! {
         sha256 -> Text,
         blake3 -> Text,
         entropy -> Float,
-        mime -> Text
+        mime -> Text,
+        metadata -> Jsonb
     }
 }
 

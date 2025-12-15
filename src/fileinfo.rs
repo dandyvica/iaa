@@ -100,6 +100,9 @@ pub struct FileInfo {
 
     // try to have kind of mime type from magic numbers
     pub mime: Option<&'static str>,
+
+    // optional metadata for the file
+    pub metadata: Option<serde_json::Value>,
 }
 
 // has to implement default manually cause SystemTime has no default
@@ -120,6 +123,7 @@ impl Default for FileInfo {
             blake3: String::new(),
             entropy: None,
             mime: None,
+            metadata: None,
         }
     }
 }

@@ -2,21 +2,19 @@
 use std::{
     sync::Arc,
     thread::{self, JoinHandle},
-    time::SystemTime,
 };
 
-use chrono::{DateTime, NaiveDateTime, Utc};
 use crossbeam_channel as channel;
 use diesel::{
     r2d2::{ConnectionManager, PooledConnection},
     PgConnection, RunQueryDsl,
 };
 use log::trace;
-use walkdir::{DirEntry, DirEntryExt};
+use walkdir::DirEntry;
 
 use crate::{
     args::Args,
-    discoverer::{Discoverer, PNG},
+    discoverer::IHDR,
     fileinfo::{FileInfo, ForensicsFileType},
 };
 use crate::{memory::MappedFile, schema::artefact::dsl::artefact};
@@ -93,7 +91,7 @@ pub fn worker(
             // for other operations, we need to open and read files
             let mapped = MappedFile::try_from(entry.path())?;
 
-            // according to oprions, call whatever is asked
+            // according to options, call whatever is asked
             if args.blake3 {
                 fi.blake3 = mapped.blake3();
             }
@@ -106,12 +104,10 @@ pub fn worker(
                 fi.entropy = Some(mapped.entropy());
             }
 
-            // try to guess the mime type
-            fi.mime = mapped.discover();
-
-            // if fi.mime == Some(PNG::MIME) {
-            //     println!("{:?}", PNG::metadata(&mapped));
-            // }
+            // try to guess the mime type and extract some metadata
+            if args.discover {
+                (fi.mime, fi.metadata) = mapped.discover();
+            }
         }
 
         // insert data

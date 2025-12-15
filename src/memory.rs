@@ -2,14 +2,25 @@ use std::{fs::File, io, ops::Deref, path::Path};
 
 use memmap::Mmap;
 
-use crate::discoverer::Discoverer;
+use crate::discoverer::{Discoverer, IHDR};
 
 macro_rules! try_discover {
+    // case of non metadata are possible to extract (or too difficult)
     ($Struct:ident, $Self:ident) => {
         use crate::discoverer::$Struct;
 
         if let Some(value) = $Struct::mime($Self) {
-            return Some(value);
+            return (Some(value), None);
+        }
+    };
+
+    // case of metadata are possible to extract
+    ($Struct:ident, $Self:ident, $MetaStruct:ident) => {
+        use crate::discoverer::$Struct;
+
+        if let Some(value) = $Struct::mime($Self) {
+            let metadata = $Struct::metadata::<$MetaStruct>($Self);
+            return (Some(value), metadata);
         }
     };
 }
@@ -24,7 +35,7 @@ impl TryFrom<&Path> for MappedFile {
 
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
         // open file
-        let mut file = File::open(path)?;
+        let file = File::open(path)?;
 
         // mmemap is unsafe by nature
         let mmap = unsafe { Mmap::map(&file)? };
@@ -52,13 +63,13 @@ impl MappedFile {
     }
 
     // try to discover mime type from magic numbers
-    pub fn discover(&self) -> Option<&'static str> {
-        try_discover!(PNG, self);
+    pub fn discover(&self) -> (Option<&'static str>, Option<serde_json::Value>) {
+        try_discover!(PNG, self, IHDR);
         try_discover!(SQLITE3, self);
         try_discover!(GIF87a, self);
         try_discover!(GIF89a, self);
 
-        None
+        (None, None)
     }
 }
 

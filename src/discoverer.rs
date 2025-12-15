@@ -1,29 +1,90 @@
+use bincode::{config::BigEndian, Decode};
 use hex_literal::hex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Result, Value};
 
-// list of usual file signatures
-type SIGNATURE<'a> = (&'a [u8], Option<&'a [u8]>, &'static str);
+// list of all file signatures
+pub struct FileSignature {
+    header: &'static [u8],
+    footer: Option<&'static [u8]>,
+    mime: &'static str,
+    endianness: Endianness,
+    metafunc: Option<fn(&[u8]) -> &[u8]>,
+}
 
-const SIGN_SQLITE3: SIGNATURE = (
-    b"\x53\x51\x4C\x69\x74\x65\x20\x66\x6F\x72\x6D\x61\x74\x20\x33\x00",
-    None,
-    "sqlite3",
-);
+const SIGN_SQLITE3: FileSignature = FileSignature {
+    header: b"\x53\x51\x4C\x69\x74\x65\x20\x66\x6F\x72\x6D\x61\x74\x20\x33\x00",
+    footer: None,
+    mime: "sqlite3",
+    endianness: Endianness::BigEndian,
+    metafunc: None,
+};
 
 #[allow(non_upper_case_globals)]
-const SIGN_GIF87a: SIGNATURE = (
-    b"\x47\x49\x46\x38\x37\x61",
-    None,
-    "GIF87a",
-);
+const SIGN_GIF87a: FileSignature = FileSignature {
+    header: b"\x47\x49\x46\x38\x37\x61",
+    footer: None,
+    mime: "GIF87a",
+    endianness: Endianness::LittleEndian,
+    metafunc: None,
+};
 
 #[allow(non_upper_case_globals)]
-const SIGN_GIF89a: SIGNATURE = (
-    b"\x47\x49\x46\x38\x39\x61",
-    None,
-    "GIF89a",
-);
+const SIGN_GIF89a: FileSignature = FileSignature {
+    header: b"\x47\x49\x46\x38\x39\x61",
+    footer: None,
+    mime: "GIF89a",
+    endianness: Endianness::LittleEndian,
+    metafunc: None,
+};
+
+const SIGN_PNG: FileSignature = FileSignature {
+    header: b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A",
+    footer: Some(b"\xae\x42\x60\x82"),
+    mime: "png",
+    endianness: Endianness::BigEndian,
+    metafunc: Some(|x| &x[16..29]),
+};
+
+// to get some metadat, we have to know whether integers are stored
+// using big or little endian. E.g: PNG uses big endian
+#[derive(Debug, PartialEq)]
+enum Endianness {
+    BigEndian,
+    LittleEndian,
+}
+
+// a trait for tyring to discover file types using magic numbers
+pub trait Discoverer<'a> {
+    const FILE_SIGNATURE: FileSignature;
+
+    // try to match header/footer on file bytes
+    fn mime(bytes: &'a [u8]) -> Option<&'static str>;
+
+    // try to get specific metadata
+    fn metadata<T: Serialize + Decode<()>>(bytes: &'a [u8]) -> Option<serde_json::Value> {
+        // bincode config differs whether we decode big_endian or little_endian ints
+        let bytes = if let Some(metafunc) = Self::FILE_SIGNATURE.metafunc {
+            metafunc(bytes)
+        } else {
+            bytes
+        };
+
+        if Self::FILE_SIGNATURE.endianness == Endianness::BigEndian {
+            let config = bincode::config::standard()
+                .with_big_endian()
+                .with_fixed_int_encoding();
+            let decoded: (T, usize) = bincode::decode_from_slice(bytes, config).ok()?;
+            serde_json::to_value(&decoded.0).ok()
+        } else {
+            let config = bincode::config::standard()
+                .with_little_endian()
+                .with_fixed_int_encoding();
+            let decoded: (T, usize) = bincode::decode_from_slice(bytes, config).ok()?;
+            serde_json::to_value(&decoded.0).ok()
+        }
+    }
+}
 
 // a macro for defining impl Discoverer
 macro_rules! impl_discoverer {
@@ -32,47 +93,52 @@ macro_rules! impl_discoverer {
     ($Struct:ident, $Sign:ident) => {
         pub struct $Struct;
         impl<'a> Discoverer<'a> for $Struct {
-            const HEADER: &'a [u8] = $Sign.0;
-            const FOOTER: Option<&'a [u8]> = $Sign.1;
-            const MIME: &'static str = $Sign.2;
+            const FILE_SIGNATURE: FileSignature = $Sign;
 
             fn mime(bytes: &'a [u8]) -> Option<&'static str> {
-                if bytes.len() >= Self::HEADER.len()
-                    && bytes[0..Self::HEADER.len()] == *Self::HEADER
-                {
-                    Some(Self::MIME)
-                } else {
-                    None
+                let len = bytes.len();
+                let fs = Self::FILE_SIGNATURE;
+
+                // 2 cases: we've got only the header, or also footer
+                // both
+                if let Some(footer) = fs.footer {
+                    if len >= (fs.header.len() + footer.len())
+                        && bytes[..fs.header.len()] == *fs.header
+                        && bytes[len - footer.len()..len] == *footer
+                    {
+                        Some(fs.mime)
+                    } else {
+                        None
+                    }
+                }
+                // only header
+                else {
+                    if len >= fs.header.len() && bytes[0..fs.header.len()] == *fs.header {
+                        Some(fs.mime)
+                    } else {
+                        None
+                    }
                 }
             }
         }
     };
 }
 
+// list of usual file signatures
+// - bytes header
+// - optional bytes for footer
+// - mime type
+// - endianness
+type SIGNATURE<'a> = (&'a [u8], Option<&'a [u8]>, &'static str, Endianness);
+
 // real implemntations
 impl_discoverer!(SQLITE3, SIGN_SQLITE3);
 impl_discoverer!(GIF87a, SIGN_GIF87a);
 impl_discoverer!(GIF89a, SIGN_GIF89a);
-
-
-// a trait for tyring to discover file types using magic numbers
-pub trait Discoverer<'a> {
-    const HEADER: &'a [u8];
-    const FOOTER: Option<&'a [u8]>;
-    const MIME: &'static str;
-
-    // try to match header/footer on file bytes
-    fn mime(bytes: &'a [u8]) -> Option<&'static str>;
-
-    // try to get specific metadata
-    // fn metadata(bytes: &'a [u8]) -> Option<String>;
-}
-
-// PNGs
-pub struct PNG;
+impl_discoverer!(PNG, SIGN_PNG);
 
 // the header chunk
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Decode)]
 /// Represents the IHDR chunk of a PNG image.
 /// This is the first chunk in every valid PNG file and defines
 /// the basic characteristics of the image.
@@ -107,53 +173,12 @@ pub struct IHDR {
     pub interlace: u8,
 }
 
-impl IHDR {
-    // when reading the PNG file, we get access to raw data
-    // this creates the header from bytes
-    pub fn from_bytes(data: &[u8]) -> anyhow::Result<Self> {
-        let mut ihdr = IHDR::default();
-
-        let mut buf = [0u8; 4];
-        buf.copy_from_slice(&data[0..4]);
-        ihdr.width = u32::from_be_bytes(buf);
-
-        buf.copy_from_slice(&data[4..8]);
-        ihdr.height = u32::from_be_bytes(buf);
-
-        ihdr.bit_depth = data[8];
-        ihdr.color_type = data[9];
-        ihdr.compression = data[10];
-        ihdr.filter = data[11];
-        ihdr.interlace = data[12];
-
-        Ok(ihdr)
-    }
-}
-
-impl<'a> Discoverer<'a> for PNG {
-    const HEADER: &'a [u8] = &hex!("89 50 4E 47 0D 0A 1A 0A");
-    const FOOTER: Option<&'a [u8]> = Some(&hex!("ae 42 60 82"));
-    const MIME: &'static str = "png";
-
-    fn mime(bytes: &'a [u8]) -> Option<&'static str> {
-        let len = bytes.len();
-
-        if len >= 12
-            && bytes[..Self::HEADER.len()] == *Self::HEADER
-            && bytes[len - 4..len] == *Self::FOOTER.unwrap()
-        {
-            Some(Self::MIME)
-        } else {
-            None
-        }
-    }
-
-    // get IHDR chunk
-    // fn metadata(bytes: &'a [u8]) -> Option<String> {
-    //     let ihdr = IHDR::from_bytes(&bytes[16..29]).unwrap_or_default();
-    //     Some(serde_json::to_string(&ihdr).unwrap())
-    // }
-}
+//     // get IHDR chunk
+//     // fn metadata(bytes: &'a [u8]) -> Option<String> {
+//     //     let ihdr = IHDR::from_bytes(&bytes[16..29]).unwrap_or_default();
+//     //     Some(serde_json::to_string(&ihdr).unwrap())
+//     // }
+// }
 
 #[cfg(test)]
 mod tests {

@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS artefact (
     sha256 text,
     blake3  text,
     entropy float,
-    mime text
+    mime text,
+    metadata jsonb
 );
 
 -- set comments on table
