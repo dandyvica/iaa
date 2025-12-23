@@ -38,14 +38,6 @@ const SIGN_GIF89a: FileSignature = FileSignature {
     metafunc: None,
 };
 
-const SIGN_PNG: FileSignature = FileSignature {
-    header: b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A",
-    footer: Some(b"\xae\x42\x60\x82"),
-    mime: "png",
-    endianness: Endianness::BigEndian,
-    metafunc: Some(|x| &x[16..29]),
-};
-
 // to get some metadat, we have to know whether integers are stored
 // using big or little endian. E.g: PNG uses big endian
 #[derive(Debug, PartialEq)]
@@ -135,9 +127,21 @@ type SIGNATURE<'a> = (&'a [u8], Option<&'a [u8]>, &'static str, Endianness);
 impl_discoverer!(SQLITE3, SIGN_SQLITE3);
 impl_discoverer!(GIF87a, SIGN_GIF87a);
 impl_discoverer!(GIF89a, SIGN_GIF89a);
+
+
+//-------------------------------------------------------------------------------------------
+// PNG
+//-------------------------------------------------------------------------------------------
+const SIGN_PNG: FileSignature = FileSignature {
+    header: b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A",
+    footer: Some(b"\xae\x42\x60\x82"),
+    mime: "png",
+    endianness: Endianness::BigEndian,
+    metafunc: Some(|x| &x[16..29]),
+};
+
 impl_discoverer!(PNG, SIGN_PNG);
 
-// the header chunk
 #[derive(Debug, Default, Serialize, Decode)]
 /// Represents the IHDR chunk of a PNG image.
 /// This is the first chunk in every valid PNG file and defines
@@ -172,13 +176,6 @@ pub struct IHDR {
     /// 1: Adam7 interlace
     pub interlace: u8,
 }
-
-//     // get IHDR chunk
-//     // fn metadata(bytes: &'a [u8]) -> Option<String> {
-//     //     let ihdr = IHDR::from_bytes(&bytes[16..29]).unwrap_or_default();
-//     //     Some(serde_json::to_string(&ihdr).unwrap())
-//     // }
-// }
 
 #[cfg(test)]
 mod tests {
