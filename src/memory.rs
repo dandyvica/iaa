@@ -2,12 +2,21 @@ use std::{fs::File, io, ops::Deref, path::Path};
 
 use memmap::Mmap;
 
-use crate::discoverer::{Discoverer, IHDR, WavHeader};
+use crate::discoverer::{
+    bmp::{BitmapFileHeaderAndCore, BMP},
+    gif::{GIF87a, GIF89a},
+    ico::{IconDir, ICO},
+    png::{IHDR, PNG},
+    regf::{RegistryBaseBlock, REGF},
+    sqlite3::SQLITE3,
+    wav::{WavHeader, WAV},
+    Discoverer,
+};
 
 macro_rules! try_discover {
     // case of non metadata are possible to extract (or too difficult)
     ($Struct:ident, $Self:ident) => {
-        use crate::discoverer::$Struct;
+        // use crate::discoverer::$Struct;
 
         if let Some(value) = $Struct::mime($Self) {
             return (Some(value), None);
@@ -16,10 +25,11 @@ macro_rules! try_discover {
 
     // case of metadata are possible to extract
     ($Struct:ident, $Self:ident, $MetaStruct:ident) => {
-        use crate::discoverer::$Struct;
+        // use crate::discoverer::$Struct;
 
         if let Some(value) = $Struct::mime($Self) {
             let metadata = $Struct::metadata::<$MetaStruct>($Self);
+            // println!("metadata={:?}", metadata);
             return (Some(value), metadata);
         }
     };
@@ -63,12 +73,16 @@ impl MappedFile {
     }
 
     // try to discover mime type from magic numbers
+    // add additional metadata if any
     pub fn discover(&self) -> (Option<&'static str>, Option<serde_json::Value>) {
         try_discover!(PNG, self, IHDR);
         try_discover!(SQLITE3, self);
         try_discover!(GIF87a, self);
         try_discover!(GIF89a, self);
         try_discover!(WAV, self, WavHeader);
+        try_discover!(REGF, self, RegistryBaseBlock);
+        try_discover!(BMP, self, BitmapFileHeaderAndCore);
+        try_discover!(ICO, self, IconDir);
 
         (None, None)
     }

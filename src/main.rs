@@ -7,6 +7,7 @@ use std::{
 // crates
 use crossbeam_channel as channel;
 use diesel::RunQueryDsl;
+use humantime::format_duration;
 use log::{debug, error, info, trace};
 
 use walkdir::{DirEntry, WalkDir};
@@ -107,8 +108,8 @@ fn main() -> anyhow::Result<()> {
     //───────────────────────────────────────────────────────────────────────────────────
     let elapsed = now.elapsed();
     info!(
-        "took {} millis for {file_count} artefacts",
-        elapsed.as_millis()
+        "took {} for {file_count} artefacts",
+        format_duration(elapsed)
     );
 
     //───────────────────────────────────────────────────────────────────────────────────
@@ -116,6 +117,7 @@ fn main() -> anyhow::Result<()> {
     //───────────────────────────────────────────────────────────────────────────────────
     history.nb_files = file_count as i64;
     history.end_time = SystemTime::now();
+    history.elapsed = format_duration(elapsed).to_string();
 
     diesel::insert_into(run_history)
         .values(&history)

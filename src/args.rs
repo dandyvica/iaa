@@ -74,7 +74,7 @@ pub fn get_args() -> anyhow::Result<Args> {
     if args.db.is_none() {
         match std::env::var(DB) {
             Ok(db) => args.db = Some(db),
-            Err(e) => return Err(anyhow!("no PG DB provided!")),
+            Err(e) => return Err(anyhow!("no Postgres DB provided!")),
         }
     }
 

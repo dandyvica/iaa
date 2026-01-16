@@ -23,6 +23,7 @@ diesel::table! {
     run_history (start_time) {
         start_time -> Timestamp,
         end_time -> Timestamp,
+        elapsed -> Text,
         nb_files -> BigInt,
         args -> Text,
         tags -> Text

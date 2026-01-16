@@ -121,7 +121,7 @@ macro_rules! impl_discoverer {
 // - optional bytes for footer
 // - mime type
 // - endianness
-type SIGNATURE<'a> = (&'a [u8], Option<&'a [u8]>, &'static str, Endianness);
+//type SIGNATURE<'a> = (&'a [u8], Option<&'a [u8]>, &'static str, Endianness);
 
 // real implemntations
 impl_discoverer!(SQLITE3, SIGN_SQLITE3);

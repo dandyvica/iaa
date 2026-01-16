@@ -133,6 +133,7 @@ impl Default for FileInfo {
 pub struct RunHistory {
     pub start_time: SystemTime,
     pub end_time: SystemTime,
+    pub elapsed: String,
     pub nb_files: i64,
     pub args: String,
     pub tags: String,
@@ -143,6 +144,7 @@ impl Default for RunHistory {
         Self {
             start_time: SystemTime::now(),
             end_time: SystemTime::now(),
+            elapsed: String::new(),
             nb_files: 0,
             args: String::new(),
             tags: String::new(),

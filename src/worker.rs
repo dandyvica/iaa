@@ -14,7 +14,6 @@ use walkdir::DirEntry;
 
 use crate::{
     args::Args,
-    discoverer::IHDR,
     fileinfo::{FileInfo, ForensicsFileType},
 };
 use crate::{memory::MappedFile, schema::artefact::dsl::artefact};

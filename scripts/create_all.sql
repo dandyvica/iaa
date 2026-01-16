@@ -34,6 +34,7 @@ COMMENT ON COLUMN artefact.len is 'The file size in bytes';
 CREATE TABLE IF NOT EXISTS run_history (
     start_time timestamp,
     end_time timestamp,
+    elapsed text,
     nb_files bigint,
     args text,
     tags text
