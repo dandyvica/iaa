@@ -10,15 +10,14 @@ use crate::{
 //-------------------------------------------------------------------------------------------
 // PNG
 //-------------------------------------------------------------------------------------------
-const SIGN_REGF: FileSignature = FileSignature {
+const SIGNATURE: FileSignature = FileSignature {
     header: b"regf",
     footer: None,
     mime: "regf",
     endianness: Endianness::LittleEndian,
-    metafunc: None,
 };
 
-impl_discoverer!(REGF, SIGN_REGF);
+impl_discoverer!(REGF, SIGNATURE);
 
 #[derive(Debug, Serialize, Decode)]
 pub struct RegistryBaseBlock {

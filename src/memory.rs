@@ -10,25 +10,33 @@ use crate::discoverer::{
     regf::{RegistryBaseBlock, REGF},
     sqlite3::SQLITE3,
     wav::{WavHeader, WAV},
+    zip::ZIP,
     Discoverer,
 };
 
 macro_rules! try_discover {
     // case of non metadata are possible to extract (or too difficult)
     ($Struct:ident, $Self:ident) => {
-        // use crate::discoverer::$Struct;
-
         if let Some(value) = $Struct::mime($Self) {
             return (Some(value), None);
         }
     };
 
-    // case of metadata are possible to extract
+    // case of metadata are possible to extract using
+    // trait's metadata()
     ($Struct:ident, $Self:ident, $MetaStruct:ident) => {
-        // use crate::discoverer::$Struct;
-
         if let Some(value) = $Struct::mime($Self) {
             let metadata = $Struct::metadata::<$MetaStruct>($Self);
+            // println!("metadata={:?}", metadata);
+            return (Some(value), metadata);
+        }
+    };
+
+    // case of metadata are possible to extract using
+    // custom metadata()
+    ($Struct:ident, $Self:ident, $MetaFunc:expr) => {
+        if let Some(value) = $Struct::mime($Self) {
+            let metadata = $MetaFunc($Self);
             // println!("metadata={:?}", metadata);
             return (Some(value), metadata);
         }
@@ -74,6 +82,8 @@ impl MappedFile {
 
     // try to discover mime type from magic numbers
     // add additional metadata if any
+    // return the optional mime type and associated metadata as a JSON value, to be added
+    // as a JSONB postgres column type
     pub fn discover(&self) -> (Option<&'static str>, Option<serde_json::Value>) {
         try_discover!(PNG, self, IHDR);
         try_discover!(SQLITE3, self);
@@ -83,6 +93,7 @@ impl MappedFile {
         try_discover!(REGF, self, RegistryBaseBlock);
         try_discover!(BMP, self, BitmapFileHeaderAndCore);
         try_discover!(ICO, self, IconDir);
+        try_discover!(ZIP, self, ZIP::files);
 
         (None, None)
     }

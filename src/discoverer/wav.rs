@@ -2,21 +2,22 @@ use bincode::Decode;
 use serde::Serialize;
 
 use crate::{
-    discoverer::{Endianness, FileSignature},
+    discoverer::{Endianness, FileSignature, LITTLEENDIAN_CONFIG},
     impl_discoverer,
 };
 
 //-------------------------------------------------------------------------------------------
 // WAV
 //-------------------------------------------------------------------------------------------
-const SIGN_WAV: FileSignature = FileSignature {
+const SIGNATURE: FileSignature = FileSignature {
     header: b"RIFF",
     footer: None,
     mime: "wav",
     endianness: Endianness::LittleEndian,
-    metafunc: None,
+    // metafunc: Some(struct_decoder),
 };
-impl_discoverer!(WAV, SIGN_WAV);
+
+impl_discoverer!(WAV, SIGNATURE);
 
 #[repr(C)]
 #[derive(Debug, Serialize, Decode)]

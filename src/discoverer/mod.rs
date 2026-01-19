@@ -1,11 +1,15 @@
-use bincode::{config::BigEndian, Decode};
+use std::{io::Read, sync::LazyLock};
+
+use bincode::{
+    config::{BigEndian, Config, Configuration, Fixint, LittleEndian},
+    Decode,
+};
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Result, Value};
 
 // all modules corresponding to file types here
 // #tag
-pub mod zip;
 pub mod bmp;
 pub mod gif;
 pub mod ico;
@@ -13,19 +17,33 @@ pub mod png;
 pub mod regf;
 pub mod sqlite3;
 pub mod wav;
+pub mod zip;
 
-// list of all file signatures
+// bincode uses configuration which is different from big and little endian
+// architectures. Best place here to make it static rather than create it each time
+pub static BIGENDIAN_CONFIG: LazyLock<Configuration<BigEndian, Fixint>> = LazyLock::new(|| {
+    bincode::config::standard()
+        .with_big_endian()
+        .with_fixed_int_encoding()
+});
+
+pub static LITTLEENDIAN_CONFIG: LazyLock<Configuration<LittleEndian, Fixint>> =
+    LazyLock::new(|| {
+        bincode::config::standard()
+            .with_little_endian()
+            .with_fixed_int_encoding()
+    });
+
 pub struct FileSignature {
     header: &'static [u8],
     footer: Option<&'static [u8]>,
     mime: &'static str,
     endianness: Endianness,
-    metafunc: Option<fn(&[u8]) -> &[u8]>,
 }
 
 // to get some metadat, we have to know whether integers are stored
 // using big or little endian. E.g: PNG uses big endian
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 enum Endianness {
     BigEndian,
     LittleEndian,
@@ -40,26 +58,13 @@ pub trait Discoverer<'a> {
 
     // try to get specific metadata
     fn metadata<T: Serialize + Decode<()>>(bytes: &'a [u8]) -> Option<serde_json::Value> {
-        // bincode config differs whether we decode big_endian or little_endian ints
-        let bytes = if let Some(metafunc) = Self::FILE_SIGNATURE.metafunc {
-            metafunc(bytes)
-        } else {
-            bytes
+        let decoded: (T, usize) = match Self::FILE_SIGNATURE.endianness {
+            Endianness::BigEndian => bincode::decode_from_slice(bytes, *BIGENDIAN_CONFIG).ok()?,
+            Endianness::LittleEndian => {
+                bincode::decode_from_slice(bytes, *LITTLEENDIAN_CONFIG).ok()?
+            }
         };
-
-        if Self::FILE_SIGNATURE.endianness == Endianness::BigEndian {
-            let config = bincode::config::standard()
-                .with_big_endian()
-                .with_fixed_int_encoding();
-            let decoded: (T, usize) = bincode::decode_from_slice(bytes, config).ok()?;
-            serde_json::to_value(&decoded.0).ok()
-        } else {
-            let config = bincode::config::standard()
-                .with_little_endian()
-                .with_fixed_int_encoding();
-            let decoded: (T, usize) = bincode::decode_from_slice(bytes, config).ok()?;
-            serde_json::to_value(&decoded.0).ok()
-        }
+        serde_json::to_value(&decoded.0).ok()
     }
 }
 

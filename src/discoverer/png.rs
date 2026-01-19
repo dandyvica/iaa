@@ -14,7 +14,7 @@ const SIGNATURE: FileSignature = FileSignature {
     footer: Some(b"\xae\x42\x60\x82"),
     mime: "png",
     endianness: Endianness::BigEndian,
-    metafunc: Some(|x| &x[16..29]),
+    //metafunc: Some(|x| &x[16..29]),
 };
 
 impl_discoverer!(PNG, SIGNATURE);
@@ -25,6 +25,15 @@ impl_discoverer!(PNG, SIGNATURE);
 /// This is the first chunk in every valid PNG file and defines
 /// the basic characteristics of the image.
 pub struct IHDR {
+    #[serde(skip)]
+    signature: [u8; 8],
+
+    #[serde(skip)]
+    ihdr_length: u32,
+
+    #[serde(skip)]
+    ihdr_type: u32,
+
     /// Image width in pixels (must be greater than 0).
     pub width: u32,
 

@@ -14,7 +14,6 @@ const SIGNATURE: FileSignature = FileSignature {
     footer: None,
     mime: "bmp",
     endianness: Endianness::LittleEndian,
-    metafunc: None,
 };
 impl_discoverer!(BMP, SIGNATURE);
 
