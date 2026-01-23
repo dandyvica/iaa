@@ -25,6 +25,7 @@ mod memory;
 mod pool;
 mod schema;
 use pool::establish_pool;
+mod config;
 mod discoverer;
 
 use schema::artefact::dsl::artefact;

@@ -106,6 +106,8 @@ pub fn worker(
             // try to guess the mime type and extract some metadata
             if args.discover {
                 (fi.mime, fi.metadata) = mapped.discover();
+
+                (fi.mime, fi.metadata) = mapped.discover_path(entry.path()).unwrap();
             }
         }
 

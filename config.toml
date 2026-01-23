@@ -1,0 +1,5 @@
+# link between extension found and mimetype (or category)
+[artefact.png]
+discover = true
+category = "image"
+

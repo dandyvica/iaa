@@ -41,6 +41,16 @@ macro_rules! try_discover {
             return (Some(value), metadata);
         }
     };
+
+    // case of metadata are possible to extract using
+    // custom metadata() but metatdata() uses Path
+    ($Struct:ident, $Self:ident, $path:ident, $MetaFunc:expr) => {
+        if let Some(value) = $Struct::mime($Self) {
+            let metadata = $MetaFunc($path)?;
+            // println!("metadata={:?}", metadata);
+            return Ok((Some(value), metadata));
+        }
+    };
 }
 
 // as we have to calculate hashes, magic number etc, w use memmap
@@ -86,7 +96,6 @@ impl MappedFile {
     // as a JSONB postgres column type
     pub fn discover(&self) -> (Option<&'static str>, Option<serde_json::Value>) {
         try_discover!(PNG, self, IHDR);
-        try_discover!(SQLITE3, self);
         try_discover!(GIF87a, self);
         try_discover!(GIF89a, self);
         try_discover!(WAV, self, WavHeader);
@@ -95,8 +104,19 @@ impl MappedFile {
         try_discover!(ICO, self, IconDir);
         try_discover!(ZIP, self, ZIP::files);
 
+        //try_discover!(SQLITE3, self, path, SQLITE3::tables);
+
         (None, None)
     }
+
+    // same but sometimes, we need the full path and not the memmap because specific crate can't handle it
+    // (e.g.: sqlite)
+    pub fn discover_path(&self, path: &Path) -> anyhow::Result<(Option<&'static str>, Option<serde_json::Value>)> {
+        try_discover!(SQLITE3, self, path, SQLITE3::tables);
+
+        Ok((None, None))
+    }
+
 }
 
 impl Deref for MappedFile {
